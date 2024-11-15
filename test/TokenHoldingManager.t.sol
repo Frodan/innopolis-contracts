@@ -4,6 +4,7 @@ pragma solidity ^0.8.19;
 import "forge-std/Test.sol";
 import "../src/authManagers/TokenHoldingManager.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 // Mock ERC20 token for testing
 contract MockToken is ERC20 {
@@ -11,6 +12,19 @@ contract MockToken is ERC20 {
 
     function mint(address to, uint256 amount) external {
         _mint(to, amount);
+    }
+}
+
+// Add after the existing MockToken contract
+contract MockNFT is ERC721 {
+    uint256 private _nextTokenId;
+
+    constructor() ERC721("Mock NFT", "MNFT") {}
+
+    function mint(address to) external returns (uint256) {
+        uint256 tokenId = _nextTokenId++;
+        _mint(to, tokenId);
+        return tokenId;
     }
 }
 
@@ -138,5 +152,119 @@ contract TokenHoldingManagerTest is Test {
         vm.prank(user2);
         token.transfer(user1, 1);
         assertTrue(manager.isWhitelisted(user1));
+    }
+
+    function testWithNFT() public {
+        // Deploy NFT contract
+        MockNFT nft = new MockNFT();
+        
+        // Deploy manager with NFT
+        TokenHoldingManager nftManager = new TokenHoldingManager(
+            address(nft),
+            1  // Require at least 1 NFT
+        );
+
+        // Initially user should not be whitelisted
+        assertFalse(nftManager.isWhitelisted(user1));
+        
+        // Mint NFT to user1
+        nft.mint(user1);
+        assertTrue(nftManager.isWhitelisted(user1));
+        
+        // Transfer NFT to user2
+        vm.startPrank(user1);
+        nft.transferFrom(user1, user2, 0);
+        vm.stopPrank();
+        
+        assertFalse(nftManager.isWhitelisted(user1));
+        assertTrue(nftManager.isWhitelisted(user2));
+    }
+
+    function testMultipleNFTs() public {
+        MockNFT nft = new MockNFT();
+        TokenHoldingManager nftManager = new TokenHoldingManager(
+            address(nft),
+            2  // Require at least 2 NFTs
+        );
+
+        // Mint one NFT
+        nft.mint(user1);
+        assertFalse(nftManager.isWhitelisted(user1));
+
+        // Mint second NFT
+        nft.mint(user1);
+        assertTrue(nftManager.isWhitelisted(user1));
+
+        // Transfer one away
+        vm.startPrank(user1);
+        nft.transferFrom(user1, user2, 0);
+        vm.stopPrank();
+
+        assertFalse(nftManager.isWhitelisted(user1));
+        assertFalse(nftManager.isWhitelisted(user2));
+    }
+
+    function testNFTBatchTransfers() public {
+        MockNFT nft = new MockNFT();
+        TokenHoldingManager nftManager = new TokenHoldingManager(
+            address(nft),
+            3  // Require 3 NFTs
+        );
+
+        // Mint 3 NFTs to user1
+        nft.mint(user1);
+        nft.mint(user1);
+        nft.mint(user1);
+        assertTrue(nftManager.isWhitelisted(user1));
+
+        // Transfer all NFTs to user2
+        vm.startPrank(user1);
+        nft.transferFrom(user1, user2, 0);
+        nft.transferFrom(user1, user2, 1);
+        nft.transferFrom(user1, user2, 2);
+        vm.stopPrank();
+
+        assertFalse(nftManager.isWhitelisted(user1));
+        assertTrue(nftManager.isWhitelisted(user2));
+    }
+
+    function testMixedNFTOwnership() public {
+        MockNFT nft = new MockNFT();
+        TokenHoldingManager nftManager = new TokenHoldingManager(
+            address(nft),
+            2  // Require 2 NFTs
+        );
+
+        // Mint 3 NFTs total
+        nft.mint(user1); // ID 0
+        nft.mint(user1); // ID 1
+        nft.mint(user2); // ID 2
+
+        assertTrue(nftManager.isWhitelisted(user1));
+        assertFalse(nftManager.isWhitelisted(user2));
+
+        // Transfer one from user1 to user2
+        vm.prank(user1);
+        nft.transferFrom(user1, user2, 0);
+
+        assertFalse(nftManager.isWhitelisted(user1));
+        assertTrue(nftManager.isWhitelisted(user2));
+    }
+
+    function testNFTBurning() public {
+        MockNFT nft = new MockNFT();
+        TokenHoldingManager nftManager = new TokenHoldingManager(
+            address(nft),
+            1  // Require 1 NFT
+        );
+
+        // Mint NFT to user1
+        uint256 tokenId = nft.mint(user1);
+        assertTrue(nftManager.isWhitelisted(user1));
+
+        // Burn NFT (transfer to zero address)
+        vm.prank(user1);
+        nft.transferFrom(user1, address(0xdead), tokenId);
+        assertFalse(nftManager.isWhitelisted(user1));
     }
 } 
