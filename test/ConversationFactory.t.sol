@@ -153,4 +153,92 @@ contract ConversationFactoryTest is Test {
         Conversation conversation = Conversation(conversationAddr);
         assertEq(conversation.deadline(), block.timestamp);
     }
+
+    function testCreateENSHoldingManager() public {
+        address reverseRegistrar = address(0x123); // Mock address
+        
+        vm.prank(creator1);
+        address ensManager = factory.createENSHoldingManager(reverseRegistrar);
+        
+        // Verify the manager was created correctly
+        ENSHoldingManager manager = ENSHoldingManager(ensManager);
+        assertEq(address(manager.reverseRegistrar()), reverseRegistrar);
+    }
+
+    function testCreateENSHoldingManagerZeroAddress() public {
+        vm.prank(creator1);
+        vm.expectRevert("Reverse registrar cannot be 0");
+        factory.createENSHoldingManager(address(0));
+    }
+
+    function testCreateTokenHoldingManager() public {
+        address token = address(0x456); // Mock token address
+        uint256 minBalance = 100 * 10**18;
+        
+        vm.prank(creator1);
+        address tokenManager = factory.createTokenHoldingManager(token, minBalance);
+        
+        // Verify the manager was created correctly
+        TokenHoldingManager manager = TokenHoldingManager(tokenManager);
+        assertEq(manager.token(), token);
+        assertEq(manager.minBalance(), minBalance);
+    }
+
+    function testCreateTokenHoldingManagerZeroAddress() public {
+        vm.prank(creator1);
+        vm.expectRevert("Token address cannot be 0");
+        factory.createTokenHoldingManager(address(0), 100 * 10**18);
+    }
+
+    function testCreateManagersWithDifferentUsers() public {
+        address token = address(0x456);
+        address reverseRegistrar = address(0x123);
+        
+        // Creator1 creates managers
+        vm.prank(creator1);
+        address tokenManager1 = factory.createTokenHoldingManager(token, 100 * 10**18);
+        
+        vm.prank(creator1);
+        address ensManager1 = factory.createENSHoldingManager(reverseRegistrar);
+        
+        // Creator2 creates managers
+        vm.prank(creator2);
+        address tokenManager2 = factory.createTokenHoldingManager(token, 200 * 10**18);
+        
+        vm.prank(creator2);
+        address ensManager2 = factory.createENSHoldingManager(reverseRegistrar);
+        
+        // Verify all managers are different
+        assertTrue(tokenManager1 != tokenManager2);
+        assertTrue(ensManager1 != ensManager2);
+        
+        // Verify configurations
+        assertEq(TokenHoldingManager(tokenManager1).minBalance(), 100 * 10**18);
+        assertEq(TokenHoldingManager(tokenManager2).minBalance(), 200 * 10**18);
+        assertEq(address(ENSHoldingManager(ensManager1).reverseRegistrar()), reverseRegistrar);
+        assertEq(address(ENSHoldingManager(ensManager2).reverseRegistrar()), reverseRegistrar);
+    }
+
+    function testCreateManagerAndUseInConversation() public {
+        address token = address(0x456);
+        uint256 minBalance = 100 * 10**18;
+        
+        vm.startPrank(creator1);
+        
+        // Create token manager
+        address tokenManager = factory.createTokenHoldingManager(token, minBalance);
+        
+        // Create conversation with the manager
+        address conversation = factory.createConversation(
+            "Token Gated Conversation",
+            "Only for token holders",
+            tokenManager,
+            7 days
+        );
+        
+        vm.stopPrank();
+        
+        // Verify the conversation uses the correct manager
+        assertEq(Conversation(conversation).authManager(), tokenManager);
+    }
 }

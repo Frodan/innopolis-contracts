@@ -2,6 +2,8 @@
 pragma solidity ^0.8.19;
 import "./Conversation.sol";
 import "./interfaces/IAuthManager.sol";
+import "./authManagers/TokenHoldingManager.sol";
+import "./authManagers/ENSHoldingManager.sol";
 
 /**
  * @title ConversationFactory
@@ -44,6 +46,18 @@ contract ConversationFactory {
         
         return conversationAddress;
     }
+
+    function createENSHoldingManager(address _reverseRegistrar) external returns (address) {
+        ENSHoldingManager newManager = new ENSHoldingManager(_reverseRegistrar);
+        return address(newManager);
+    }
+
+    function createTokenHoldingManager(address _token, uint256 _minBalance) external returns (address) {
+        TokenHoldingManager newManager = new TokenHoldingManager(_token, _minBalance);
+        return address(newManager);
+    }
+
+
     
     /**
      * @dev Returns the number of conversations created
