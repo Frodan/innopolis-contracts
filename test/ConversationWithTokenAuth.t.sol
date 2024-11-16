@@ -58,12 +58,12 @@ contract ConversationWithTokenAuthTest is Test {
 
         // Voter1 should be able to vote (has enough tokens)
         vm.prank(voter1);
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
 
         // Voter2 should not be able to vote (insufficient tokens)
         vm.startPrank(voter2);
         vm.expectRevert("Must be whitelisted");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
         vm.stopPrank();
     }
 
@@ -75,7 +75,7 @@ contract ConversationWithTokenAuthTest is Test {
         // Initially voter2 cannot participate
         vm.prank(voter2);
         vm.expectRevert("Must be whitelisted");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
 
         // Transfer tokens to voter2
         vm.prank(voter1);
@@ -83,7 +83,7 @@ contract ConversationWithTokenAuthTest is Test {
 
         // Now voter2 should be able to participate
         vm.prank(voter2);
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
     }
 
     function testLoseParticipationRights() public {
@@ -97,7 +97,7 @@ contract ConversationWithTokenAuthTest is Test {
 
         // Voter1 should no longer be able to participate
         vm.expectRevert("Must be whitelisted");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
         vm.stopPrank();
     }
 
@@ -113,12 +113,12 @@ contract ConversationWithTokenAuthTest is Test {
         calls[0] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement1,
-            Conversation.Vote.Agree
+            Conversation.VoteType.Agree
         );
         calls[1] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement2,
-            Conversation.Vote.Disagree
+            Conversation.VoteType.Disagree
         );
 
         // Should work for voter1 (has enough tokens)
@@ -144,7 +144,7 @@ contract ConversationWithTokenAuthTest is Test {
         
         // Should fail to vote with insufficient balance
         vm.expectRevert("Must be whitelisted");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
 
         // Receive tokens back
         vm.stopPrank();
@@ -153,7 +153,7 @@ contract ConversationWithTokenAuthTest is Test {
 
         // Should be able to vote again
         vm.prank(voter1);
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
     }
 
     function testCreatorNeedsTokens() public {
@@ -181,7 +181,7 @@ contract ConversationWithTokenAuthTest is Test {
         
         // Should now fail
         vm.expectRevert("Must be whitelisted");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
         vm.stopPrank();
     }
 } 

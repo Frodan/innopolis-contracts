@@ -17,10 +17,16 @@ contract Conversation is Multicall {
         uint256 timestamp;
     }
 
-    enum Vote {
+    enum VoteType {
         Neutral,
         Agree,
         Disagree
+    }
+
+    struct Vote {
+        address voter;
+        VoteType vote;
+        uint256 statementId;
     }
 
     // State variables
@@ -28,6 +34,7 @@ contract Conversation is Multicall {
     string public description;
     address public creator;
     uint256 public statementCount;
+    uint256 public voteCount;
     uint256 public deadline;
     address public authManager;
     
@@ -35,11 +42,13 @@ contract Conversation is Multicall {
     mapping(uint256 => Statement) public statements;
 
     // Votes, statementId -> voter -> vote
-    mapping(uint256 => mapping(address => Vote)) public votes;
+    mapping(uint256 => mapping(address => uint256)) public votes;
+    mapping(uint256 => Vote) public votesData;
+    mapping(address => uint256[]) public voterVotes;
     
     // Events
     event StatementAdded(uint256 indexed statementId, address indexed author, string content);
-    event VoteCast(uint256 indexed statementId, address indexed voter, Vote vote);
+    event VoteCast(uint256 indexed statementId, address indexed voter, VoteType vote);
 
     modifier onlyWhitelisted() {
         if (authManager != address(0)) {
@@ -92,23 +101,38 @@ contract Conversation is Multicall {
      * @param _statementId The ID of the statement to vote on
      * @param _vote The vote to cast
      */
-    function vote(uint256 _statementId, Vote _vote) external onlyWhitelisted {
+    function vote(uint256 _statementId, VoteType _vote) external onlyWhitelisted {
         require(block.timestamp < deadline, "Deadline has passed");
         require(_statementId < statementCount, "Statement does not exist");
-        require(votes[_statementId][msg.sender] == Vote.Neutral, "Already voted");
+        require(votesData[votes[_statementId][msg.sender]].voter == address(0), "Already voted");
 
         Statement storage statement = statements[_statementId];
 
         // Record new vote
-        votes[_statementId][msg.sender] = _vote;
+        voteCount++;
+        votes[_statementId][msg.sender] = voteCount;
+        votesData[voteCount] = Vote({
+            voter: msg.sender,
+            vote: _vote,
+            statementId: _statementId
+        });
+        voterVotes[msg.sender].push(voteCount);
 
         // Update vote counts
-        if (_vote == Vote.Agree) {
+        if (_vote == VoteType.Agree) {
             statement.agreeCount++;
-        } else if (_vote == Vote.Disagree) {
+        } else if (_vote == VoteType.Disagree) {
             statement.disagreeCount++;
         }
 
         emit VoteCast(_statementId, msg.sender, _vote);
+    }
+
+    function getVotesData(address _voter) external view returns (Vote[] memory) {
+        Vote[] memory _votes = new Vote[](voterVotes[_voter].length);
+        for (uint256 i = 0; i < voterVotes[_voter].length; i++) {
+            _votes[i] = votesData[voterVotes[_voter][i]];
+        }
+        return _votes;
     }
 }

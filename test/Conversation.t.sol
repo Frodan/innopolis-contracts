@@ -87,15 +87,18 @@ contract ConversationTest is Test {
         
         // Test voting
         vm.startPrank(voter1);
-        
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
         
         (,, uint256 agreeCount, uint256 disagreeCount,) = conversation.statements(statementId);
         assertEq(agreeCount, 1);
         assertEq(disagreeCount, 0);
 
-        uint256 userVote = uint256(conversation.votes(statementId, voter1));
-        assertEq(userVote, 1);
+        // Verify vote data
+        Conversation.Vote[] memory votes = conversation.getVotesData(voter1);
+        assertEq(votes.length, 1);
+        assertEq(uint256(votes[0].vote), uint256(Conversation.VoteType.Agree));
+        assertEq(votes[0].voter, voter1);
+        assertEq(votes[0].statementId, statementId);
         
         vm.stopPrank();
     }
@@ -105,10 +108,10 @@ contract ConversationTest is Test {
         uint256 statementId = conversation.addStatement("Test Statement");
         
         vm.startPrank(voter1);
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
         
         vm.expectRevert("Already voted");
-        conversation.vote(statementId, Conversation.Vote.Disagree);
+        conversation.vote(statementId, Conversation.VoteType.Disagree);
         vm.stopPrank();
     }
 
@@ -121,7 +124,7 @@ contract ConversationTest is Test {
         
         vm.prank(voter1);
         vm.expectRevert("Deadline has passed");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
     }
 
     function testCannotAddStatementAfterDeadline() public {
@@ -149,7 +152,7 @@ contract ConversationTest is Test {
         // Try to vote as non-whitelisted
         vm.prank(nonWhitelisted);
         vm.expectRevert("Must be whitelisted");
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
     }
 
     function testMultipleVoters() public {
@@ -159,15 +162,24 @@ contract ConversationTest is Test {
         
         // First voter agrees
         vm.prank(voter1);
-        conversation.vote(statementId, Conversation.Vote.Agree);
+        conversation.vote(statementId, Conversation.VoteType.Agree);
         
         // Second voter disagrees
         vm.prank(voter2);
-        conversation.vote(statementId, Conversation.Vote.Disagree);
+        conversation.vote(statementId, Conversation.VoteType.Disagree);
         
         (,, uint256 agreeCount, uint256 disagreeCount,) = conversation.statements(statementId);
         assertEq(agreeCount, 1);
         assertEq(disagreeCount, 1);
+
+        // Verify votes data
+        Conversation.Vote[] memory votes1 = conversation.getVotesData(voter1);
+        Conversation.Vote[] memory votes2 = conversation.getVotesData(voter2);
+        
+        assertEq(votes1.length, 1);
+        assertEq(votes2.length, 1);
+        assertEq(uint256(votes1[0].vote), uint256(Conversation.VoteType.Agree));
+        assertEq(uint256(votes2[0].vote), uint256(Conversation.VoteType.Disagree));
     }
 
     function testMulticallVoting() public {
@@ -183,27 +195,29 @@ contract ConversationTest is Test {
         calls[0] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement1,
-            Conversation.Vote.Agree
+            Conversation.VoteType.Agree
         );
         calls[1] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement2,
-            Conversation.Vote.Disagree
+            Conversation.VoteType.Disagree
         );
         calls[2] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement3,
-            Conversation.Vote.Agree
+            Conversation.VoteType.Agree
         );
 
         // Execute multicall as voter1
         vm.prank(voter1);
         conversation.multicall(calls);
 
-        // Verify all votes were recorded correctly
-        assertEq(uint256(conversation.votes(statement1, voter1)), uint256(Conversation.Vote.Agree));
-        assertEq(uint256(conversation.votes(statement2, voter1)), uint256(Conversation.Vote.Disagree));
-        assertEq(uint256(conversation.votes(statement3, voter1)), uint256(Conversation.Vote.Agree));
+        // Verify votes were recorded correctly
+        Conversation.Vote[] memory votes = conversation.getVotesData(voter1);
+        assertEq(votes.length, 3);
+        assertEq(uint256(votes[0].vote), uint256(Conversation.VoteType.Agree));
+        assertEq(uint256(votes[1].vote), uint256(Conversation.VoteType.Disagree));
+        assertEq(uint256(votes[2].vote), uint256(Conversation.VoteType.Agree));
 
         // Verify vote counts
         (,, uint256 agree1, uint256 disagree1,) = conversation.statements(statement1);
@@ -228,12 +242,12 @@ contract ConversationTest is Test {
         calls[0] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement1,
-            Conversation.Vote.Agree
+            Conversation.VoteType.Agree
         );
         calls[1] = abi.encodeWithSelector(
             conversation.vote.selector,
             statement1,
-            Conversation.Vote.Disagree  // This should fail as we can't vote twice
+            Conversation.VoteType.Disagree  // This should fail as we can't vote twice
         );
 
         // Execute multicall as voter1
@@ -242,6 +256,7 @@ contract ConversationTest is Test {
         conversation.multicall(calls);
 
         // Verify no votes were recorded (transaction should have reverted)
-        assertEq(uint256(conversation.votes(statement1, voter1)), uint256(Conversation.Vote.Neutral));
+        Conversation.Vote[] memory votes = conversation.getVotesData(voter1);
+        assertEq(votes.length, 0);
     }
 }
