@@ -241,4 +241,43 @@ contract ConversationFactoryTest is Test {
         // Verify the conversation uses the correct manager
         assertEq(Conversation(conversation).authManager(), tokenManager);
     }
+
+    function testCreateETHBalanceManager() public {
+        uint256 minBalance = 1 ether;
+        
+        vm.prank(creator1);
+        address ethManager = factory.createETHBalanceManager(minBalance);
+        
+        // Verify the manager was created correctly
+        ETHBalanceManager manager = ETHBalanceManager(ethManager);
+        assertEq(manager.minBalance(), minBalance);
+    }
+
+    function testCreateETHBalanceManagerZeroBalance() public {
+        vm.prank(creator1);
+        vm.expectRevert("Minimum balance must be greater than 0");
+        factory.createETHBalanceManager(0);
+    }
+
+    function testCreateETHManagerAndUseInConversation() public {
+        uint256 minBalance = 1 ether;
+        
+        vm.startPrank(creator1);
+        
+        // Create ETH manager
+        address ethManager = factory.createETHBalanceManager(minBalance);
+        
+        // Create conversation with the manager
+        address conversation = factory.createConversation(
+            "ETH Gated Conversation",
+            "Only for ETH holders",
+            ethManager,
+            7 days
+        );
+        
+        vm.stopPrank();
+        
+        // Verify the conversation uses the correct manager
+        assertEq(Conversation(conversation).authManager(), ethManager);
+    }
 }

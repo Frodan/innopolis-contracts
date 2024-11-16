@@ -4,12 +4,14 @@ import "./Conversation.sol";
 import "./interfaces/IAuthManager.sol";
 import "./authManagers/TokenHoldingManager.sol";
 import "./authManagers/ENSHoldingManager.sol";
+import "./authManagers/ETHBalanceManager.sol";
+import "@openzeppelin/contracts/utils/Multicall.sol";
 
 /**
  * @title ConversationFactory
  * @dev Factory contract for creating and managing Conversation instances
  */
-contract ConversationFactory {
+contract ConversationFactory is Multicall {
     // Array to store all created conversation addresses
     address[] public conversations;
     
@@ -57,6 +59,10 @@ contract ConversationFactory {
         return address(newManager);
     }
 
+    function createETHBalanceManager(uint256 _minBalance) external returns (address) {
+        ETHBalanceManager newManager = new ETHBalanceManager(_minBalance);
+        return address(newManager);
+    }
 
     
     /**
